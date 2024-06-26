@@ -1,0 +1,15 @@
+img_size: 256
+features: 16
+
+batch_size: 8
+lr: 5.e-3
+epochs: 100
+warmup: 5
+
+ckpt: "checkpoints/checkpoint_83"
+
+focal_loss:
+  weight: 1.0
+
+dice_bce_loss:
+  weight: 1.0
