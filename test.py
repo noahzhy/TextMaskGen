@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 import flax.linen as nn
 import optax
+import numpy as np
 from PIL import Image
 
 from fit import lr_schedule, fit, TrainState, load_ckpt
@@ -49,26 +50,19 @@ if __name__ == "__main__":
     # predict one image
     img_path = '/Users/haoyu/Desktop/world license plate builder/output/image/*.png'
     img_path = random.choice(glob.glob(img_path))
-    (hmap, pixs, ord_), _ = predict_one_image(state, img_path, cfg)
-    # print(hmap.shape, char.shape, ord_.shape)
-    # sigmoid activation
-    hmap = jax.nn.sigmoid(hmap)
+    (pixs, ord_), _ = predict_one_image(state, img_path, cfg)
+
     pixs = jax.nn.sigmoid(pixs)
     ord_ = jax.nn.sigmoid(ord_)
-    # softmax activation
-    # ord_ = jax.nn.softmax(ord_, axis=-1)
     # argmax
     ord_ = jnp.argmax(ord_, axis=-1)
 
     # draw hmap and ordmap via plt
     from matplotlib import pyplot as plt
     fig, axis = plt.subplots(1, 3, figsize=(15, 5))
-    axis[0].imshow(hmap[0, :, :, :], cmap='gray')
-    axis[0].set_title('heatmap')
+    axis[0].imshow(pixs[0, :, :, :], cmap='gray')
+    axis[0].set_title('pixel map')
     axis[0].axis('off')
-    axis[1].imshow(pixs[0, :, :, :], cmap='gray')
-    axis[1].set_title('pixel map')
-    axis[1].axis('off')
     # axis[2].imshow(jnp.max(ord_[0, :, :, :], axis=-1), cmap='gray')
 
     # # show each ordmap channel
@@ -78,7 +72,16 @@ if __name__ == "__main__":
     #     plt.title(f'ordmap_{i}')
     #     plt.axis('off')
 
-    axis[2].imshow(ord_[0, :, :], cmap='gray')
-    axis[2].set_title('ordermap')
+    axis[1].imshow(ord_[0, :, :], cmap='gray')
+    axis[1].set_title('ordermap')
+    axis[1].axis('off')
+
+    # show composite image, char map is alpha channel
+    composite = np.zeros((pixs.shape[1], pixs.shape[2], 4))
+    composite[:, :, :3] = pixs[0, :, :, :]
+    composite[:, :, 3] = ord_[0, :, :]
+    axis[2].imshow(composite)
+    axis[2].set_title('composite')
     axis[2].axis('off')
+
     plt.show()

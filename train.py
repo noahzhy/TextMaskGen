@@ -9,29 +9,21 @@ import optax
 from fit import lr_schedule, fit, TrainState, load_ckpt
 from model.dataloader import DataLoader
 from model.loss import *
-from model.model import UNet
+from model.unetv3_light import UNetV3 as UNet
 
 
 @jax.jit
-def combine_loss(pred, target):
-    target_hmap = target[:, :, :, :1]
-    target_char = target[:, :, :, 1:2]
-    target_ord = target[:, :, :, 2:]
+def combine_loss(pred, target, n=16):
+    target_char = target[:, :, :, :1]
+    target_ord = target[:, :, :, 1:1+n]
 
-    pred_hmap, pred_char, pred_ord = pred
-
-    loss_hmap = focal_loss(pred_hmap, target_hmap)
-    loss_char = dice_bce_loss(pred_char, target_char)
+    pred_char, pred_ord = pred
+    loss_char = focal_loss(pred_char, target_char)
     loss_ord = dice_bce_loss(pred_ord, target_ord)
-    # loss_ord = optax.softmax_cross_entropy(pred_ord, target_ord).mean()
-    # loss_ord = focal_loss(pred_ord, target_ord)
-    # loss_ord = mse_loss(pred_ord, target_ord)
-
-    loss = loss_hmap + loss_char + loss_ord * 5
+    loss = loss_char + loss_ord * 5
 
     return loss, {
         'loss': loss,
-        'loss_hmap': loss_hmap,
         'loss_char': loss_char,
         'loss_ord': loss_ord,
     }

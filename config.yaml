@@ -6,7 +6,8 @@ lr: 5.e-3
 epochs: 100
 warmup: 5
 
-ckpt: "checkpoints/checkpoint_83"
+ckpt: "checkpoints/checkpoint_100"
+# ckpt: "backup/checkpoint_100"
 
 focal_loss:
   weight: 1.0

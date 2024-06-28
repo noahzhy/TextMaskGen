@@ -129,10 +129,9 @@ def gen_ord_mask(mask, n=16):
 
 # a array of shape (H, W, 1) to one-hot array of shape (H, W, C)
 def one_hot(array, C):
-    C += 1
     H, W, _ = array.shape
     array = np.reshape(array, (H, W))
-    array = np.eye(C)[array]
+    array = np.eye(C + 1)[array]
     # exclude background
     array = array[:, :, 1:]
     return array
@@ -147,21 +146,21 @@ def preprocess_image(mask_path, image_size=256):
     mask = (mask + 8) // 16
     mask = np.expand_dims(mask, axis=-1)
 
-    pixel_level = np.where(mask > 0.5, 1, 0)
+    char_mask = np.where(mask > 0.5, 1, 0)
 
-    bbox = get_bbox(mask_path, target_size=(image_size, image_size))
-    heat_map = draw_heatmaps((1, image_size, image_size, 1), [bbox])
-    heat_map = np.squeeze(heat_map, axis=0)
+    # bbox = get_bbox(mask_path, target_size=(image_size, image_size))
+    # heat_map = draw_heatmaps((1, image_size, image_size, 1), [bbox])
+    # heat_map = np.squeeze(heat_map, axis=0)
 
     ord_mask = gen_ord_mask(mask)
-    # ord_mask = one_hot(mask, 16)
+    # char_ord = one_hot(mask, 16)
 
     # # show ord mask
-    # plt.imshow(np.max(ord_mask[:, :, :1], axis=-1))
+    # plt.imshow(np.max(char_ord[:, :, :5], axis=-1))
     # plt.show()
     # quit()
 
-    return np.concatenate([heat_map, pixel_level, ord_mask], axis=-1, dtype=np.float32)
+    return np.concatenate([char_mask, ord_mask], axis=-1, dtype=np.float32)
 
 
 if __name__ == "__main__":
