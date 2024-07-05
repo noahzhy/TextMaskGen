@@ -2,7 +2,7 @@ img_size: 256
 features: 16
 
 batch_size: 8
-lr: 5.e-3
+lr: 3.e-3
 epochs: 100
 warmup: 5
 

@@ -1,5 +1,7 @@
 import os, sys, random, time, glob
 
+import cv2
+from scipy.spatial import ConvexHull
 import numpy as np
 import tensorflow as tf
 from PIL import Image
@@ -65,8 +67,8 @@ def gaussian2D(shape, sigma_x=1, sigma_y=1):
 
 def draw_truncate_gaussian(heatmap, center, h_radius, w_radius, k=1):
     h, w = 2 * h_radius + 1, 2 * w_radius + 1
-    sigma_x = w / 6
-    sigma_y = h / 6
+    sigma_x = w / 6.0
+    sigma_y = h / 6.0
     gaussian = gaussian2D((h, w), sigma_x=sigma_x, sigma_y=sigma_y)
 
     y, x = int(center[0]), int(center[1])
@@ -117,12 +119,18 @@ def gen_ord_mask(mask, n=16):
         if len(np.where(mask == i+1)[0]) == 0:
             continue
 
-        m = np.where(mask == i+1, 1, 0)
+        m = np.squeeze(np.where(mask == i+1, 1, 0), axis=-1)
+
+        # m = np.argwhere(m)
+        # hull = ConvexHull(m)
+        # points = np.array(m[hull.vertices], dtype=np.int32)[:, ::-1]
+        # img_slice = arr[:, :, i].copy()
+        # cv2.fillPoly(img_slice, pts=[points], color=(1,))
+        # arr[:, :, i] = img_slice
+    
         rmin, rmax = np.where(np.any(m, axis=1))[0][[0, -1]]
         cmin, cmax = np.where(np.any(m, axis=0))[0][[0, -1]]
-
         arr[rmin:rmax+1, cmin:cmax+1, i] = 1
-        # arr[:, :, i] = m
 
     return arr
 
@@ -148,19 +156,19 @@ def preprocess_image(mask_path, image_size=256):
 
     char_mask = np.where(mask > 0.5, 1, 0)
 
-    # bbox = get_bbox(mask_path, target_size=(image_size, image_size))
-    # heat_map = draw_heatmaps((1, image_size, image_size, 1), [bbox])
-    # heat_map = np.squeeze(heat_map, axis=0)
+    bbox = get_bbox(mask_path, target_size=(image_size, image_size))
+    heat_map = draw_heatmaps((1, image_size, image_size, 1), [bbox])
+    heat_map = np.squeeze(heat_map, axis=0)
 
     ord_mask = gen_ord_mask(mask)
-    # char_ord = one_hot(mask, 16)
+    # ord_mask = one_hot(mask, 16)
 
     # # show ord mask
-    # plt.imshow(np.max(char_ord[:, :, :5], axis=-1))
+    # plt.imshow(np.max(ord_mask[:, :, 4:], axis=-1))
     # plt.show()
     # quit()
 
-    return np.concatenate([char_mask, ord_mask], axis=-1, dtype=np.float32)
+    return np.concatenate([heat_map, char_mask, ord_mask], axis=-1, dtype=np.float32)
 
 
 if __name__ == "__main__":
@@ -169,6 +177,8 @@ if __name__ == "__main__":
     IMAGE_SIZE = 256
 
     mask_path = glob.glob(PATH + '/mask/*.png')
+    # shuffle
+    random.shuffle(mask_path)
 
     for f in mask_path:
         d = preprocess_image(f)

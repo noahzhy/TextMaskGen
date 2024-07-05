@@ -3,9 +3,6 @@ from jax import numpy as jnp
 from flax import linen as nn
 
 
-# TODO: unet 3+ model
-
-
 class ConvBlock(nn.Module):
     features: int = 64
     n: int = 2

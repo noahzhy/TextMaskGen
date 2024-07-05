@@ -2,6 +2,8 @@ checkpoints/
 debug/
 logs/
 utils/preprocess.py
+backup/checkpoint_100
+*.*g
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

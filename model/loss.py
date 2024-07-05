@@ -18,14 +18,24 @@ def dice_bce_loss(logits, targets, smooth=1e-7, **kwargs):
     return bce + dice
 
 
-# mse loss
 @jax.jit
-def mse_loss(pred, target):
-    # softmax activation
-    # pred = jax.nn.softmax(pred, axis=-1)
-    # mse loss
-    loss = jnp.mean(jnp.square(pred - target))
-    return loss
+def dice_coef(pred, target, smooth=1.e-9):
+    pred = pred.flatten()
+    target = target.flatten()
+    transposed_pred = jnp.transpose(pred)
+    intersection = jnp.dot(target, transposed_pred)
+    union = jnp.dot(target, jnp.transpose(target)) + jnp.dot(pred, jnp.transpose(pred))
+    return 1 - (2. * intersection + smooth) / (union + smooth)
+
+
+@jax.jit
+def batch_dice_coef(pred, target):
+    dice = 0
+    """Dice coeff for batches"""
+    for i, p in enumerate(pred):
+        dice += dice_coef(p, target)
+
+    return dice / (i + 1)
 
 
 # focal loss
@@ -62,3 +72,12 @@ if __name__ == "__main__":
     pred = jnp.array([0.1, 0.2, 0.3, 0.4, 0.5])
     target = jnp.array([0, 1, 0, 1, 0])
     print(focal_loss(pred, target))
+
+    # dice_coef_loss(
+    #     K.theano.shared(np.array([[0,0,0],[0,0,0]])),
+    #     K.theano.shared(np.array([[0,0,0],[0,0,0]]))
+    # ).eval() # array([ 0.,  0.])
+
+    pred = jnp.array([[0, 0, 0], [1, 1, 1]])
+    target = jnp.array([[0, 0, 0]])
+    print(batch_dice_coef(pred, target))

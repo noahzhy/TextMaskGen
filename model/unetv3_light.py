@@ -6,7 +6,6 @@ from flax import linen as nn
 class ConvBlock(nn.Module):
     features: int = 64
     n: int = 2
-    use_softmax: bool = False
     training: bool = True
 
     @nn.compact
@@ -20,10 +19,72 @@ class ConvBlock(nn.Module):
                 kernel_init=nn.initializers.kaiming_normal()
             )(x)
             x = nn.BatchNorm(use_running_average=not self.training)(x)
-            if self.use_softmax:
-                x = nn.softmax(x)
-            else:
-                x = nn.relu(x)
+            x = nn.relu(x)
+        return x
+
+
+class ConvUpsampleSoftmax(nn.Module):
+    features: int = 64
+    upsample: int = 2
+
+    @nn.compact
+    def __call__(self, x):
+        x = nn.Conv(self.features,
+                kernel_size=(3, 3),
+                strides=(1, 1),
+                padding='SAME',
+                kernel_init=nn.initializers.kaiming_normal()
+            )(x)
+        if self.upsample > 1:
+            x = jax.image.resize(x,
+                shape=(x.shape[0], x.shape[1] * self.upsample, x.shape[2] * self.upsample, x.shape[3]),
+                method='bilinear'
+            )
+        x = nn.softmax(x)
+        return x
+
+
+# spatial attention
+class SpatialAttention(nn.Module):
+    features: int = 64
+    training: bool = True
+
+    @nn.compact
+    def __call__(self, x):
+        avg_pool = nn.avg_pool(x, window_shape=(x.shape[1], x.shape[2]), strides=(1, 1))
+        max_pool = nn.max_pool(x, window_shape=(x.shape[1], x.shape[2]), strides=(1, 1))
+        x = jnp.concatenate([avg_pool, max_pool], axis=-1)
+        x = nn.Conv(self.features,
+            kernel_size=(1, 1),
+            strides=(1, 1),
+            kernel_init=nn.initializers.kaiming_normal()
+        )(x)
+        x = nn.sigmoid(x)
+        return x
+
+
+# STN module
+class STN(nn.Module):
+
+    @nn.compact
+    def __call__(self, x):
+        xs = nn.Conv(8, kernel_size=7, strides=1, padding='SAME')(x)
+        xs = nn.max_pool(xs, window_shape=(2, 2), strides=(2, 2))
+        xs = nn.relu(xs)
+        xs = nn.Conv(10, kernel_size=5, strides=1, padding='SAME')(xs)
+        xs = nn.max_pool(xs, window_shape=(2, 2), strides=(2, 2))
+        xs = nn.relu(xs)
+        xs = xs.reshape((-1, 90))
+
+        theta = nn.Sequential([
+            nn.Dense(32),
+            nn.relu,
+            nn.Dense(6),
+        ])(xs)
+        theta = theta.reshape((-1, 2, 3))
+
+        grid = jnp.linalg.inv(jnp.diag(jnp.ones((x.shape[0], 2)) + 1e-5)) @ theta
+        x = jnp.contrib.scipy.ndimage.map_coordinates(x, grid, order=1, mode='reflect')
         return x
 
 
@@ -58,7 +119,7 @@ class Decoder(nn.Module):
 
     @nn.compact
     def __call__(self, e1, e2, e3, e4, e5):
-        up_chans = self.features * len([e1, e2, e3, e4, e5])
+        up_chans = self.features * 4
 
         e3_d4 = nn.max_pool(e3, window_shape=(2, 2), strides=(2, 2))
         e3_d4 = ConvBlock(features=self.features, n=1, training=self.training)(e3_d4)
@@ -92,7 +153,7 @@ class Decoder(nn.Module):
         d4_d1 = jax.image.resize(d4, shape=(d4.shape[0], d4.shape[1] * 8, d4.shape[2] * 8, d4.shape[3]), method='bilinear')
         d4_d1 = ConvBlock(features=self.features, n=1, training=self.training)(d4_d1)
         d1 = jnp.concatenate([e1_d1, d2_d1, d3_d1, d4_d1], axis=-1)
-        d1 = ConvBlock(features=up_chans, n=1, training=self.training, use_softmax=True)(d1)
+        d1 = ConvBlock(features=up_chans, n=1, training=self.training)(d1)
 
         # branch for charmap
         char = ConvBlock(features=self.features, n=1, training=self.training)(d1)
@@ -101,75 +162,27 @@ class Decoder(nn.Module):
             kernel_size=(1, 1),
             strides=1,
             kernel_init=nn.initializers.kaiming_normal(),
-            use_bias=True,
         )(char)
 
-        # branch for ordmap
-        ord_ = ConvBlock(features=self.features * 4, n=1, training=self.training)(d1)
-        ord_ = nn.Conv(
-            features=self.ord_nums,
+        hmap = ConvBlock(features=self.features, n=1, training=self.training)(d1)
+        hmap = nn.Conv(
+            features=1,
             kernel_size=(1, 1),
             strides=1,
             kernel_init=nn.initializers.kaiming_normal(),
-            use_bias=True,
-        )(ord_)
+        )(hmap)
 
-        return char, ord_
+        # supervision
+        d1 = ConvUpsampleSoftmax(features=self.ord_nums, upsample=0)(d1)
 
+        if self.training:
+            d2 = ConvUpsampleSoftmax(features=self.ord_nums, upsample=2)(d2)
+            d3 = ConvUpsampleSoftmax(features=self.ord_nums, upsample=4)(d3)
+            d4 = ConvUpsampleSoftmax(features=self.ord_nums, upsample=8)(d4)
+            d5 = ConvUpsampleSoftmax(features=self.ord_nums, upsample=16)(e5)
+            return hmap, char, (d1, d2, d3, d4, d5)
 
-class UpSample(nn.Module):
-    up_repeat: int = 3
-    n_channels: int = 128
-
-    @nn.compact
-    def __call__(self, x, train=True):
-        for _ in range(self.up_repeat):
-            x = nn.Conv(
-                features=self.n_channels,
-                kernel_size=(3, 3),
-                strides=(1, 1),
-                padding="same",
-                kernel_init=nn.initializers.kaiming_normal(),
-                use_bias=False)(x)
-            x = nn.BatchNorm(use_running_average=not train)(x)
-            x = nn.PReLU()(x)
-            x = jax.image.resize(x,
-                                 shape=(x.shape[0], x.shape[1] * 2,
-                                        x.shape[2] * 2, x.shape[3]),
-                                 method="nearest")
-        return x
-
-
-# spatial attention
-class SpatialAttention(nn.Module):
-    features: int = 64
-
-    @nn.compact
-    def __call__(self, x):
-        avg_pool = jnp.mean(x, axis=-1, keepdims=True)
-        max_pool = jnp.max(x, axis=-1, keepdims=True)
-        pool = jnp.concatenate([avg_pool, max_pool], axis=-1)
-        pool = nn.Conv(self.features, kernel_size=(1, 1))(pool)
-        pool = nn.relu(pool)
-        pool = nn.Conv(1, kernel_size=(1, 1))(pool)
-        pool = nn.sigmoid(pool)
-        return pool
-
-
-# channel attention
-class ChannelAttention(nn.Module):
-    features: int = 64
-
-    @nn.compact
-    def __call__(self, x):
-        avg_pool = jnp.mean(x, axis=(1, 2), keepdims=True)
-        max_pool = jnp.max(x, axis=(1, 2), keepdims=True)
-        pool = jnp.concatenate([avg_pool, max_pool], axis=-1)
-        pool = nn.Conv(128, kernel_size=(1, 1))(pool)
-        pool = nn.relu(pool)
-        pool = nn.Conv(x.shape[-1], kernel_size=(1, 1))(pool)
-        pool = nn.sigmoid(pool)
-        return x * pool
+        return hmap, char, d1
 
 
 class UNetV3(nn.Module):
@@ -197,7 +210,7 @@ if __name__ == '__main__':
 
     key = jax.random.PRNGKey(0)
     model = UNetV3(16, training=True)
-    x = jnp.ones((1, 320, 320, 3))
+    x = jnp.ones((1, 256, 256, 3))
     params = model.init(key, x)
     out, batch_stats = model.apply(
         params, x,
