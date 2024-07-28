@@ -1,4 +1,4 @@
-img_size: 256
+img_size: [256,256]
 features: 16
 
 batch_size: 8
@@ -6,7 +6,7 @@ lr: 3.e-3
 epochs: 100
 warmup: 5
 
-ckpt: "checkpoints/checkpoint_100"
+# ckpt: "backup/checkpoint_96"
 # ckpt: "backup/checkpoint_100"
 
 focal_loss:

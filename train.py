@@ -14,22 +14,18 @@ from model.unetv3_light import UNetV3 as UNet
 
 @jax.jit
 def combine_loss(pred, target, n=16):
-    # target_hmap = target[:, :, :, 0:1]
-    target_char = target[:, :, :, 1:2]
-    target_ord = target[:, :, :, 2:2+n]
+    target_char = target[:, :, :, 0:1]
+    # target_ord = target[:, :, :, 1:1+n]
 
-    pred_hmap, pred_char, pred_ord = pred
-    # pred_hmap = focal_loss(pred_hmap, target_hmap)
-    loss_char = focal_loss(pred_char, target_char)
-    loss_ord = batch_dice_coef(pred_ord, target_ord)
-    # loss_ord = dice_coef(pred_ord, target_ord)
-    loss = loss_char + loss_ord * 10.0
+    pred_char = pred
+    # loss_char = focal_loss(pred_char, target_char)
+    # loss_ord = batch_dice_coef(pred_ord, target_ord)
+    loss = dice_bce_loss(pred_char, target_char)
 
     return loss, {
         'loss': loss,
-        # 'loss_hmap': pred_hmap,
-        'loss_char': loss_char,
-        'loss_ord': loss_ord,
+        # 'loss_char': loss_char,
+        # 'loss_ord': loss_ord,
     }
 
 
@@ -37,7 +33,7 @@ cfg = yaml.safe_load(open("config.yaml"))
 print(cfg)
 
 key = jax.random.PRNGKey(0)
-dir_path = "/Users/haoyu/Desktop/world license plate builder/output/image"
+dir_path = "/Users/haoyu/Documents/datasets/lpr/mini_train"
 train_dl = DataLoader(dir_path, cfg["batch_size"], cfg["img_size"])
 train_len = len(train_dl)
 lr_fn = lr_schedule(cfg["lr"], train_len, cfg["epochs"], cfg["warmup"])
@@ -83,10 +79,10 @@ def predict(state: TrainState, batch):
 
 if __name__ == "__main__":
     # cpu mode
-    jax.config.update("jax_platform_name", "cpu")
+    # jax.config.update("jax_platform_name", "cpu")
 
     key = jax.random.PRNGKey(0)
-    x = jnp.zeros((1, cfg["img_size"], cfg["img_size"], 3))
+    x = jnp.zeros((1, *cfg["img_size"], 3))
 
     model = UNet(cfg["features"], cfg["features"], training=True)
     var = model.init(key, x)

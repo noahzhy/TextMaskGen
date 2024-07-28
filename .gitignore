@@ -3,6 +3,7 @@ debug/
 logs/
 utils/preprocess.py
 backup/checkpoint_100
+demo/checkpoint_100
 *.*g
 
 # Byte-compiled / optimized / DLL files

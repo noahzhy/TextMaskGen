@@ -50,7 +50,7 @@ class CoordConv(nn.Module):
     def __call__(self, x):
         x = AddCoords(with_r=self.with_r)(x)
         x = nn.Conv(
-            self.features,
+            features=self.features,
             kernel_size=(3, 3),
             strides=(1, 1),
             padding='SAME',
@@ -85,13 +85,12 @@ class ConvUpsample(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        x = CoordConv(self.features, with_r=True)(x)
-        # x = nn.Conv(self.features,
-        #         kernel_size=(3, 3),
-        #         strides=(1, 1),
-        #         padding='SAME',
-        #         kernel_init=nn.initializers.kaiming_normal()
-        #     )(x)
+        x = nn.Conv(self.features,
+                kernel_size=(3, 3),
+                strides=(1, 1),
+                padding='SAME',
+                kernel_init=nn.initializers.kaiming_normal()
+            )(x)
         if self.upsample > 1:
             x = jax.image.resize(x,
                 shape=(x.shape[0], x.shape[1] * self.upsample, x.shape[2] * self.upsample, x.shape[3]),
@@ -108,19 +107,19 @@ class Encoder(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        e1 = ConvBlock(self.features, training=self.training)(x)
+        e1 = ConvBlock(features=self.features, training=self.training)(x)
         e1_pool = nn.max_pool(e1, window_shape=(2, 2), strides=(2, 2))
 
-        e2 = ConvBlock(self.features * 2, training=self.training)(e1_pool)
+        e2 = ConvBlock(features=self.features * 2, training=self.training)(e1_pool)
         e2_pool = nn.max_pool(e2, window_shape=(2, 2), strides=(2, 2))
 
-        e3 = ConvBlock(self.features * 4, training=self.training)(e2_pool)
+        e3 = ConvBlock(features=self.features * 4, training=self.training)(e2_pool)
         e3_pool = nn.max_pool(e3, window_shape=(2, 2), strides=(2, 2))
 
-        e4 = ConvBlock(self.features * 8, training=self.training)(e3_pool)
+        e4 = ConvBlock(features=self.features * 8, training=self.training)(e3_pool)
         e4_pool = nn.max_pool(e4, window_shape=(2, 2), strides=(2, 2))
 
-        e5 = ConvBlock(self.features * 16, training=self.training)(e4_pool)
+        e5 = ConvBlock(features=self.features * 16, training=self.training)(e4_pool)
 
         return e1, e2, e3, e4, e5
 
@@ -135,67 +134,58 @@ class Decoder(nn.Module):
         up_chans = self.features * 4
 
         e3_d4 = nn.max_pool(e3, window_shape=(2, 2), strides=(2, 2))
-        e3_d4 = ConvBlock(self.features, n=1, training=self.training)(e3_d4)
-        e4_d4 = ConvBlock(self.features, n=1, training=self.training)(e4)
+        e3_d4 = ConvBlock(features=self.features, n=1, training=self.training)(e3_d4)
+        e4_d4 = ConvBlock(features=self.features, n=1, training=self.training)(e4)
         e5_d4 = jax.image.resize(e5, shape=(e5.shape[0], e5.shape[1] * 2, e5.shape[2] * 2, e5.shape[3]), method='bilinear')
-        e5_d4 = ConvBlock(self.features, n=1, training=self.training)(e5_d4)
+        e5_d4 = ConvBlock(features=self.features, n=1, training=self.training)(e5_d4)
         d4 = jnp.concatenate([e3_d4, e4_d4, e5_d4], axis=-1)
-        d4 = ConvBlock(up_chans, n=1, training=self.training)(d4)
+        d4 = ConvBlock(features=up_chans, n=1, training=self.training)(d4)
 
         e2_d3 = nn.max_pool(e2, window_shape=(2, 2), strides=(2, 2))
-        e2_d3 = ConvBlock(self.features, n=1, training=self.training)(e2_d3)
-        e3_d3 = ConvBlock(self.features, n=1, training=self.training)(e3)
+        e2_d3 = ConvBlock(features=self.features, n=1, training=self.training)(e2_d3)
+        e3_d3 = ConvBlock(features=self.features, n=1, training=self.training)(e3)
         e4_d3 = jax.image.resize(e4, shape=(e4.shape[0], e4.shape[1] * 2, e4.shape[2] * 2, e4.shape[3]), method='bilinear')
-        e4_d3 = ConvBlock(self.features, n=1, training=self.training)(e4_d3)
+        e4_d3 = ConvBlock(features=self.features, n=1, training=self.training)(e4_d3)
         d3 = jnp.concatenate([e2_d3, e3_d3, e4_d3], axis=-1)
-        d3 = ConvBlock(up_chans, n=1, training=self.training)(d3)
+        d3 = ConvBlock(features=up_chans, n=1, training=self.training)(d3)
 
         e1_d2 = nn.max_pool(e1, window_shape=(2, 2), strides=(2, 2))
-        e1_d2 = ConvBlock(self.features, n=1, training=self.training)(e1_d2)
-        e2_d2 = ConvBlock(self.features, n=1, training=self.training)(e2)
+        e1_d2 = ConvBlock(features=self.features, n=1, training=self.training)(e1_d2)
+        e2_d2 = ConvBlock(features=self.features, n=1, training=self.training)(e2)
         d3_d2 = jax.image.resize(d3, shape=(d3.shape[0], d3.shape[1] * 2, d3.shape[2] * 2, d3.shape[3]), method='bilinear')
-        d3_d2 = ConvBlock(self.features, n=1, training=self.training)(d3_d2)
+        d3_d2 = ConvBlock(features=self.features, n=1, training=self.training)(d3_d2)
         d2 = jnp.concatenate([e1_d2, e2_d2, d3_d2], axis=-1)
-        d2 = ConvBlock(up_chans, n=1, training=self.training)(d2)
+        d2 = ConvBlock(features=up_chans, n=1, training=self.training)(d2)
 
-        e1_d1 = ConvBlock(self.features, n=1, training=self.training)(e1)
+        e1_d1 = ConvBlock(features=self.features, n=1, training=self.training)(e1)
         d2_d1 = jax.image.resize(d2, shape=(d2.shape[0], d2.shape[1] * 2, d2.shape[2] * 2, d2.shape[3]), method='bilinear')
-        d2_d1 = ConvBlock(self.features, n=1, training=self.training)(d2_d1)
+        d2_d1 = ConvBlock(features=self.features, n=1, training=self.training)(d2_d1)
         d3_d1 = jax.image.resize(d3, shape=(d3.shape[0], d3.shape[1] * 4, d3.shape[2] * 4, d3.shape[3]), method='bilinear')
-        d3_d1 = ConvBlock(self.features, n=1, training=self.training)(d3_d1)
+        d3_d1 = ConvBlock(features=self.features, n=1, training=self.training)(d3_d1)
         d4_d1 = jax.image.resize(d4, shape=(d4.shape[0], d4.shape[1] * 8, d4.shape[2] * 8, d4.shape[3]), method='bilinear')
-        d4_d1 = ConvBlock(self.features, n=1, training=self.training)(d4_d1)
+        d4_d1 = ConvBlock(features=self.features, n=1, training=self.training)(d4_d1)
         d1 = jnp.concatenate([e1_d1, d2_d1, d3_d1, d4_d1], axis=-1)
-        d1 = ConvBlock(up_chans, n=1, training=self.training)(d1)
+        d1 = ConvBlock(features=up_chans, n=1, training=self.training)(d1)
 
         # branch for charmap
-        char = ConvBlock(self.features, n=1, training=self.training)(d1)
-        char = CoordConv(self.features, with_r=True)(char)
-        char = nn.Conv(1,
+        char = ConvBlock(features=self.features, n=1, training=self.training)(d1)
+        char = nn.Conv(
+            features=1,
             kernel_size=(1, 1),
             strides=1,
             kernel_init=nn.initializers.kaiming_normal(),
         )(char)
 
-        # ordmap
-        ordmap = ConvBlock(self.features, n=1, training=self.training)(d1)
-        ordmap = CoordConv(self.features * 2, with_r=True)(ordmap)
-        ordmap = nn.Conv(self.ord_nums,
-            kernel_size=(1, 1),
-            strides=1,
-            kernel_init=nn.initializers.kaiming_normal(),
-        )(ordmap)
-
-        return char, ordmap
+        return char
 
         # # supervision
-        # d1 = ConvUpsample(self.ord_nums, upsample=0)(d1)
+        # d1 = ConvUpsample(features=self.ord_nums, upsample=0)(d1)
 
         # if self.training:
-        #     d2 = ConvUpsample(self.ord_nums, upsample=2)(d2)
-        #     d3 = ConvUpsample(self.ord_nums, upsample=4)(d3)
-        #     d4 = ConvUpsample(self.ord_nums, upsample=8)(d4)
-        #     d5 = ConvUpsample(self.ord_nums, upsample=16)(e5)
+        #     d2 = ConvUpsample(features=self.ord_nums, upsample=2)(d2)
+        #     d3 = ConvUpsample(features=self.ord_nums, upsample=4)(d3)
+        #     d4 = ConvUpsample(features=self.ord_nums, upsample=8)(d4)
+        #     d5 = ConvUpsample(features=self.ord_nums, upsample=16)(e5)
         #     return char, (d1, d2, d3, d4, d5)
 
         # return char, d1
@@ -209,11 +199,11 @@ class UNetV3(nn.Module):
     @nn.compact
     def __call__(self, x):
         z1, z2, z3, z4, z5 = Encoder(
-            self.features,
+            features=self.features,
             training=self.training,
         )(x)
         y = Decoder(
-            self.features,
+            features=self.features,
             ord_nums=self.ord_nums,
             training=self.training,
         )(z1, z2, z3, z4, z5)

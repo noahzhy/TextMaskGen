@@ -29,11 +29,17 @@ def dice_coef(pred, target, smooth=1.e-9):
 
 
 @jax.jit
+# mse loss
+def mse_loss(pred, target):
+    return jnp.mean(jnp.square(pred - target))
+
+
+@jax.jit
 def batch_dice_coef(pred, target):
     dice = 0
     """Dice coeff for batches"""
     for i, p in enumerate(pred):
-        dice += dice_coef(p, target)
+        dice += dice_coef(p, target) + mse_loss(p, target)
 
     return dice / (i + 1)
 

@@ -43,50 +43,42 @@ def get_bbox(mask_path, target_size=(256, 256)):
     return bboxes
 
 
-def bbox_areas_log_np(bbox):
-    x_min, y_min, x_max, y_max = bbox[0], bbox[1], bbox[2], bbox[3]
-    area = (y_max - y_min + 1) * (x_max - x_min + 1)
-    return np.log(area)
-
-
-def radius_ttf(bbox, h, w):
-    alpha = 0.54
-    h_radiuses_alpha = int(h / 2.0 * alpha)
-    w_radiuses_alpha = int(w / 2.0 * alpha)
-    return max(0, h_radiuses_alpha), max(0, w_radiuses_alpha)
-
-
-def gaussian2D(shape, sigma_x=1, sigma_y=1):
-    m, n = [(ss - 1.0) / 2.0 for ss in shape]
-    y, x = np.ogrid[-m : m + 1, -n : n + 1]
-
-    h = np.exp(-(x * x / (2 * sigma_x * sigma_x) + y * y / (2 * sigma_y * sigma_y)))
-    h[h < np.finfo(h.dtype).eps * h.max()] = 0
-    return h
-
-
-def draw_truncate_gaussian(heatmap, center, h_radius, w_radius, k=1):
-    h, w = 2 * h_radius + 1, 2 * w_radius + 1
-    sigma_x = w / 6.0
-    sigma_y = h / 6.0
-    gaussian = gaussian2D((h, w), sigma_x=sigma_x, sigma_y=sigma_y)
-
-    y, x = int(center[0]), int(center[1])
-
-    height, width = heatmap.shape[0:2]
-
-    left, right = min(x, w_radius), min(width - x, w_radius + 1)
-    top, bottom = min(y, h_radius), min(height - y, h_radius + 1)
-
-    masked_heatmap = heatmap[y - top : y + bottom, x - left : x + right]
-    masked_gaussian = gaussian[h_radius - top : h_radius + bottom, w_radius - left : w_radius + right]
-    if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
-        np.maximum(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
-
-    return heatmap
-
-
 def draw_heatmaps(shape, bboxes):
+
+    def bbox_areas_log_np(bbox):
+        x_min, y_min, x_max, y_max = bbox[0], bbox[1], bbox[2], bbox[3]
+        area = (y_max - y_min + 1) * (x_max - x_min + 1)
+        return np.log(area)
+
+    def radius_ttf(bbox, h, w):
+        # alpha = 0.54
+        alpha = 1.0
+        h_radiuses_alpha = int(h / 2.0 * alpha)
+        w_radiuses_alpha = int(w / 2.0 * alpha)
+        return max(0, h_radiuses_alpha), max(0, w_radiuses_alpha)
+
+    def gaussian2D(shape, sigma_x=1, sigma_y=1):
+        m, n = [(ss - 1.0) / 2.0 for ss in shape]
+        y, x = np.ogrid[-m : m + 1, -n : n + 1]
+        h = np.exp(-(x * x / (2 * sigma_x * sigma_x) + y * y / (2 * sigma_y * sigma_y)))
+        h[h < np.finfo(h.dtype).eps * h.max()] = 0
+        return h
+
+    def draw_truncate_gaussian(heatmap, center, h_radius, w_radius, k=1):
+        h, w = 2 * h_radius + 1, 2 * w_radius + 1
+        sigma_x = w / 1.0
+        sigma_y = h / 1.0
+        gaussian = gaussian2D((h, w), sigma_x=sigma_x, sigma_y=sigma_y)
+        y, x = int(center[0]), int(center[1])
+        height, width = heatmap.shape[0:2]
+        left, right = min(x, w_radius), min(width - x, w_radius + 1)
+        top, bottom = min(y, h_radius), min(height - y, h_radius + 1)
+        masked_heatmap = heatmap[y - top : y + bottom, x - left : x + right]
+        masked_gaussian = gaussian[h_radius - top : h_radius + bottom, w_radius - left : w_radius + right]
+        if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
+            np.maximum(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
+        return heatmap
+
     heat_map = np.zeros(shape, dtype=np.float32)
 
     for b in range(shape[0]):
@@ -146,14 +138,10 @@ def one_hot(array, C):
 
 
 def preprocess_image(mask_path, image_size=256):
-    mask = np.array(
-        Image.open(mask_path)
-        .convert('L')
-        .resize((image_size, image_size), Image.NEAREST)
-    )
+    mask = Image.open(mask_path).convert('L').resize((image_size, image_size), Image.NEAREST)
+    mask = np.array(mask)
     mask = (mask + 8) // 16
     mask = np.expand_dims(mask, axis=-1)
-
     char_mask = np.where(mask > 0.5, 1, 0)
 
     bbox = get_bbox(mask_path, target_size=(image_size, image_size))
@@ -162,13 +150,14 @@ def preprocess_image(mask_path, image_size=256):
 
     ord_mask = gen_ord_mask(mask)
     # ord_mask = one_hot(mask, 16)
+    ord_mask = heat_map * ord_mask
 
-    # # show ord mask
-    # plt.imshow(np.max(ord_mask[:, :, 4:], axis=-1))
-    # plt.show()
-    # quit()
+    # show ord mask
+    plt.imshow(np.max(ord_mask[:, :, :], axis=-1))
+    plt.show()
+    quit()
 
-    return np.concatenate([heat_map, char_mask, ord_mask], axis=-1, dtype=np.float32)
+    return np.concatenate([char_mask, ord_mask], axis=-1, dtype=np.float32)
 
 
 if __name__ == "__main__":
