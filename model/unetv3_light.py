@@ -3,6 +3,13 @@ from jax import numpy as jnp
 from flax import linen as nn
 
 
+# local shape module
+class ShapeModule(nn.Module):
+    @nn.compact
+    def __call__(self, x):
+        return x.shape
+
+
 class AddCoords(nn.Module):
     with_r: bool = True
     with_boundary: bool = False
@@ -177,8 +184,9 @@ class Decoder(nn.Module):
             kernel_init=nn.initializers.kaiming_normal(),
         )(char)
 
+        d1 = d1 + char
         # ordmap
-        ordmap = ConvBlock(self.features, n=1, training=self.training)(d1)
+        ordmap = ConvBlock(self.features * 2, n=1, training=self.training)(d1)
         ordmap = CoordConv(self.features * 2, with_r=True)(ordmap)
         ordmap = nn.Conv(self.ord_nums,
             kernel_size=(1, 1),

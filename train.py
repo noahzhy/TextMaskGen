@@ -14,18 +14,17 @@ from model.unetv3_light import UNetV3 as UNet
 
 @jax.jit
 def combine_loss(pred, target, n=16):
-    target_char = target[:, :, :, 0:1]
-    # target_ord = target[:, :, :, 1:1+n]
+    target_char, target_ord = target
+    pred_char, pred_ord = pred
 
-    pred_char = pred
-    # loss_char = focal_loss(pred_char, target_char)
-    # loss_ord = batch_dice_coef(pred_ord, target_ord)
-    loss = dice_bce_loss(pred_char, target_char)
+    loss1 = dice_bce_loss(pred_char, target_char)
+    loss2 = dice_bce_loss(pred_ord, target_ord)
+    loss = loss1 + loss2
 
     return loss, {
         'loss': loss,
-        # 'loss_char': loss_char,
-        # 'loss_ord': loss_ord,
+        'loss_char': loss1,
+        'loss_ord': loss2,
     }
 
 
@@ -41,14 +40,14 @@ lr_fn = lr_schedule(cfg["lr"], train_len, cfg["epochs"], cfg["warmup"])
 
 @jax.jit
 def train_step(state: TrainState, batch, opt_state):
-    imgs, labels = batch
+    imgs, label_chars, label_ords = batch
     def loss_fn(params):
         pred, updates = state.apply_fn({
             'params': params,
             'batch_stats': state.batch_stats
         }, imgs, mutable=['batch_stats'], rngs={'dropout': key})
 
-        loss, loss_dict = combine_loss(pred, labels)
+        loss, loss_dict = combine_loss(pred, (label_chars, label_ords))
         return loss, (loss_dict, updates)
 
     (_, (loss_dict, updates)), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)

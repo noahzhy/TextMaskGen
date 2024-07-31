@@ -12,27 +12,22 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # resize and keep the aspect ratio via pillow
 def resize(image, width=256, height=256, inter=Image.Resampling.LANCZOS) -> np.ndarray:
-    # if channel is not 1
-    if len(image.size) == 3:
-        # zero padding
-        black = Image.new('RGB', (width, height), (0, 0, 0))
-    else:
-        black = Image.new('L', (width, height), 0)
-    # resize the image and keep the aspect ratio
-    # make width is right
     if width is not None:
         wpercent = (width / float(image.size[0]))
-        hsize = int((float(image.size[1]) * float(wpercent)))
+        hsize = int(image.size[1] * wpercent)
         image = image.resize((width, hsize), inter)
-    
-    # paste the image to the top-left corner
+
+    # if height is not None:
+    #     hpercent = (height / float(image.size[1]))
+    #     wsize = int(image.size[0] * hpercent)
+    #     image = image.resize((wsize, height), inter)
+
+    black = Image.new(image.mode, (width, height), 0 if image.mode == 'L' else (0, 0, 0))
     black.paste(image, (0, 0))
-    # expand the dimension if channel is 1
-    if len(black.size) == 2:
-        black = np.array(black)
-        black = np.expand_dims(black, axis=-1)
-    else:
-        black = np.array(black)
+    black = np.array(black)
+
+    if image.mode == 'L': black = np.expand_dims(black, axis=-1)
+
     return black
 
 
@@ -55,8 +50,7 @@ class DataLoader:
 
         bs = self.batch_size
         for i in range(0, len(self.image_paths), bs):
-            images, labels = [], []
-            ordmaps = []
+            images, labels, ordmaps= [], [], []
             for image_path in self.image_paths[i:i + bs]:
                 image, label, ordmap = self.read_image(image_path)
 
@@ -76,7 +70,7 @@ class DataLoader:
 
         npy_f = image_path.replace('.jpg', '.npy')
         labels = np.load(npy_f, allow_pickle=True).astype(np.uint8)
-        labels = Image.fromarray(labels)
+        labels = Image.fromarray(labels).convert('L')
         labels = resize(labels, w, h, Image.Resampling.NEAREST)
         labels = np.array(labels, dtype=np.uint8)
 
@@ -85,7 +79,7 @@ class DataLoader:
         ordmap = np.zeros((h, w, 16), dtype=np.float32)
         uni = np.unique(labels)
         for idx, i in enumerate(uni[1:17]):
-            ordmap[..., idx] = np.squeeze(np.where(labels == i, 1, 0), axis=-1)
+            ordmap[..., idx] = np.squeeze(np.where(labels_raw == i, 1, 0), axis=-1)
 
         ordmap = np.array(ordmap, dtype=np.float32)
         # where > 0 is mask
@@ -96,7 +90,7 @@ class DataLoader:
 
 if __name__ == "__main__":
     PATH = '/Users/haoyu/Documents/datasets/lpr/mini_train'
-    BATCH_SIZE = 8
+    BATCH_SIZE = 12
     IMAGE_SIZE = (256, 256)
 
     train_data = DataLoader(PATH, BATCH_SIZE, IMAGE_SIZE)
@@ -106,13 +100,13 @@ if __name__ == "__main__":
 
     for idx, data in enumerate(train_data):
         image, label, ordmap = data
+        print(image.shape, label.shape, ordmap.shape)
         fig = plt.figure(figsize=(15, 5))
         for i, data in enumerate([image[0], label[0], ordmap[0]]):
             ax = fig.add_subplot(1, 3, i + 1)
             if data.shape[-1] == 1:
                 ax.imshow(data)
             else:
-                print(data.shape)
-                ax.imshow(np.max(data, axis=-1))
+                ax.imshow(np.max(data[:,:,:5], axis=-1))
         plt.show()
         break
