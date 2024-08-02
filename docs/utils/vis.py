@@ -37,7 +37,7 @@ def gen_label(img_path):
 
 # calculate the ratio of the given width and height
 # resize the image to the given width or height and keep the ratio
-def resize_image(image, width=256, height=128, inter=Image.Resampling.BICUBIC):
+def resize_image(image, width=256, height=128, inter=Image.Resampling.LANCZOS):
     _given_ratio = width / height
     _image_ratio = image.width / image.height
     if _image_ratio > _given_ratio:
@@ -121,6 +121,6 @@ if __name__ == '__main__':
 
         image = show_bbox(image, bboxes, label, font=font)
         # save as txt_label.jpg
-        image.save(f'docs/{txt_label}.jpg')
-        # image.show()
-        # break
+        # image.save(f'docs/{txt_label}.jpg')
+        image.show()
+        break

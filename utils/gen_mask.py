@@ -6,28 +6,30 @@ from matplotlib import pyplot as plt
 from sklearn.cluster import KMeans, DBSCAN, OPTICS, HDBSCAN, MiniBatchKMeans
 
 
+# load
+def load_image(path):
+    image_raw = cv2.imread(path)
+    image = resize(image_raw, width=256)
+    image = cv2.cvtColor(image_raw, cv2.COLOR_BGR2GRAY)
+
+    clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(3, 11))
+    image = clahe.apply(image)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(21, 3))
+    image = clahe.apply(image)
+    # denoise
+    image = cv2.fastNlMeansDenoising(image, None, 21, 5, 11)
+    return image_raw, image
+
+
 # resize and keep the aspect ratio
-def resize(image, width=None, height=None):
-    # initialize the dimensions of the image to be resized and
-    # grab the image size
-    dim = None
-    (h, w) = image.shape[:2]
-    # if both the width and height are None, then return the
-    # original image
-    if width is None and height is None:
-        return image
-    # check to see if the width is None
-    if width is None:
-        # calculate the ratio of the height and construct the
-        # dimensions
-        r = height / float(h)
-        dim = (int(w * r), height)
-    # otherwise, the height is None
+def resize(image, width=256, height=128):
+    _given_ratio = width / height
+    _image_ratio = image.shape[1] / image.shape[0]
+    if _given_ratio > _image_ratio:
+        dim = (int(image.shape[1] * height / image.shape[0]), height)
     else:
-        # calculate the ratio of the width and construct the
-        # dimensions
-        r = width / float(w)
-        dim = (width, int(h * r))
+        dim = (width, int(image.shape[0] * width / image.shape[1]))
+    
     # resize the image
     resized = cv2.resize(image, dim)
     # return the resized image
@@ -61,24 +63,33 @@ def kmeans(image, k=2):
     res2 = res.reshape((image.shape[0], image.shape[1], 1))
     return res2
 
-# load
-def load_image(path):
-    image_raw = cv2.imread(path)
-    image = resize(image_raw, width=256)
-    image = cv2.cvtColor(image_raw, cv2.COLOR_BGR2GRAY)
-
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(3, 31))
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(11, 3))
-    image = clahe.apply(image)
-    # denoise
-    image = cv2.fastNlMeansDenoising(image, None, 10, 3, 7)
-    return image_raw, image
-
 # normalize the colors  
 def normalize_color(color, n=12):
     color = color / 255
     color = np.round(color * (n - 1))
     return color
+
+
+def fit_bayesian_ridge(data, thr=1.0):
+    # 转换为DataFrame
+    df = pd.DataFrame(data, columns=['x', 'y', 'size'])
+    # sort via x then y
+    df = df.sort_values(['x', 'y'])
+    # 特征和目标变量
+    X = df[['x', 'y']]
+    y = df['size']
+
+    # 拟合模型
+    model = BayesianRidge()
+    model.fit(X, y)
+    y_pred = model.predict(X)
+    # 计算残差
+    residuals = y - y_pred
+    # 识别离群点
+    threshold = thr * np.std(residuals)  # 设定残差的阈值
+    # print the points without outliers
+    tx = df[np.abs(residuals) <= threshold]
+    return tx.values.tolist()
 
 
 def hdbscan_cluster(image, target_value, min_cluster_size=100, max_cluster_size=2000):
@@ -103,7 +114,7 @@ def hdbscan_cluster(image, target_value, min_cluster_size=100, max_cluster_size=
     points = np.argwhere(image == target_value)
     
     # Apply the HDBSCAN clustering
-    hdbscan_model = HDBSCAN(cluster_selection_epsilon=2.0, min_samples=10).fit(points)
+    hdbscan_model = HDBSCAN(cluster_selection_epsilon=1.3, min_samples=10).fit(points)
     labels = hdbscan_model.labels_
 
     # Get the number of clusters
@@ -138,30 +149,32 @@ def hdbscan_cluster(image, target_value, min_cluster_size=100, max_cluster_size=
         if cluster_centers[i, 2] == 0: continue
         # Get the mask of the current cluster
         mask = labels == order[i]
+        # get bbox of the cluster
+        x, y = cluster_centers[i, :2]
+        x1, y1 = np.min(points[mask], axis=0)
+        x2, y2 = np.max(points[mask], axis=0)
+        bbox = [x1, y1, x2, y2]
+        area = (x2 - x1) * (y2 - y1)
+        # print ratio of h/w
+        ratio_h_w = (y2 - y1) / (x2 - x1)
+        if ratio_h_w > 2: continue
+        ratio = cluster_centers[i, 2] / area
+        if ratio < 0.25: continue
         # Apply the mask to the blank image
         clustered_image[points[mask][:, 0], points[mask][:, 1]] = colors[color_idx]
-        # xys.append([
-        #     cluster_centers[i, 0], cluster_centers[i, 1],
-        #     color_idx, cluster_centers[i, 2]
-        # ])
-        # put all the points in the xys list
-        for point in points[mask]:
-            xys.append([point[0], point[1], color_idx, cluster_centers[i, 2]])
-
+        xys.append([x, y, bbox])
+        # print(f'cluster {color_idx} at {x}, {y}, size: {cluster_centers[i, 2]}, area: {area}, ratio: {ratio}')
         color_idx += 1
 
-    # print(xys)
-
-    return clustered_image, cluster_centers, xys
-
+    return clustered_image, xys
 
 # draw centers coordinates on the image
-def draw_centers(image, centers):
+def draw_centers(image, data):
     count = 0
-    for i in range(len(centers)):
+    for i in range(len(data)):
         # draw text
-        x, y, s = centers[i].astype(int)
-        if s == 0: continue
+        x, y, bbox = data[i]
+        # if s == 0: continue
         x = int(np.clip(x, 0, image.shape[0] - 1))
         y = int(np.clip(y, 0, image.shape[1] - 1))
         cv2.putText(image, str(count), (y, x), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
@@ -170,29 +183,30 @@ def draw_centers(image, centers):
     return image
 
 
-files = glob.glob(os.path.join('/Users/haoyu/Documents/datasets/lpr/mini_train', '*.jpg'))
-random.shuffle(files)
+if __name__ == "__main__":
+    files = glob.glob(os.path.join('/Users/haoyu/Documents/datasets/lpr/mini_train', '*.jpg'))
+    random.shuffle(files)
 
-for path in files:
-    print(path)
-    img_raw, image = load_image(path)
-    segmented_image = minBatchKmeans(image, 2)
-    # get centerial 1/4 part of the image
-    h, w = segmented_image.shape[:2]
-    centerial = segmented_image[h // 4: h // 4 * 3, w // 4: w // 4 * 3]
+    for path in files:
+        print(path)
+        img_raw, image = load_image(path)
+        segmented_image = minBatchKmeans(image, 2)
+        # get centerial 1/4 part of the image
+        h, w = segmented_image.shape[:2]
+        centerial = segmented_image[h // 4: h // 4 * 3, w // 4: w // 4 * 3]
 
-    if np.sum(centerial == 0) > np.sum(centerial == 1):
-        segmented_image = 1 - segmented_image
+        if np.sum(centerial == 0) > np.sum(centerial == 1):
+            segmented_image = 1 - segmented_image
 
-    pick_0 = np.min(centerial)
-    blank, centers, xys = hdbscan_cluster(segmented_image, pick_0, 50, 2400)
+        pick_0 = np.min(centerial)
+        blank, xys = hdbscan_cluster(segmented_image, pick_0, 50, 2400)
 
-    # resize the blank back to the original size, interpolate is cv2.INTER_NEAREST
-    h, w = img_raw.shape[:2]
-    blank = cv2.resize(blank, (w, h), interpolation=cv2.INTER_NEAREST)
-    # # show via matplotlib
-    # plt.imshow(blank)
-    # plt.show()
+        # resize the blank back to the original size, interpolate is cv2.INTER_NEAREST
+        h, w = img_raw.shape[:2]
+        blank = cv2.resize(blank, (w, h), interpolation=cv2.INTER_NEAREST)
+        # # show via matplotlib
+        # plt.imshow(blank)
+        # plt.show()
 
-    # save as same name with .npy
-    np.save(path.replace('.jpg', '.npy'), blank, allow_pickle=True)
+        # save as same name with .npy
+        np.save(path.replace('.jpg', '.npy'), blank, allow_pickle=True)

@@ -32,13 +32,13 @@
 #figure(
   caption: "Comparison of the existing datasets",
   table(
-    columns: (2fr, auto,1.5fr,1fr,1fr),
+    columns: (2fr,auto,auto,1fr,1fr),
     align: center + horizon,
     table.header([*Dataset*],[*Type*],[*Scale*],[*Multi-line*],[*Char-level Annotation*]),
-    [Han et al. @han2020license],       [Real + Synthetic], [18,000],         [No], [No], 
-    [KETI-ALPR @sung2020real],          [Real],             [3,000],          [Yes],[No], 
-    [KarPlate @henry2020multinational], [Real],             [4,267],          [Yes],[No], 
-    [Wang et al. @wang2021robust],      [Real + Synthetic], [10,500+500,000], [Yes],[No], 
+    [Han et al. @han2020license],       [Real + Synthetic], [22,117+9,000],   [No], [No],
+    [KETI-ALPR @sung2020real],          [Real],             [3,000],          [Yes],[No],
+    [KarPlate @henry2020multinational], [Real],             [4,267],          [Yes],[No],
+    [Wang et al. @wang2021robust],      [Real + Synthetic], [10,500+500,000], [Yes],[No],
     [Park et al. @park2022all],         [Real],             [6,878],          [Yes],[Yes],
     [Ours],                             [Real + Synthetic], [36,245+100,000], [Yes],[Yes],
   )
@@ -98,21 +98,6 @@ SKLP136 包含了不同类型的单行和双行车牌, 包含了韩国所有地�
   )
 ) <license_plate_total>
 
-
-// #figure(
-//   caption: "Collected data for different types of license plates",
-//   tablex(
-//     columns: 6,
-//     align: center + horizon,
-//     /* --- header --- */
-//     rowspanx(2)[*Type*], colspanx(2)[*Training*], (),colspanx(2)[*Validation*], (), rowspanx(2)[*Total*],
-//     (),                  [*Real*], [*Synthetic*], (),  [*Real*], [*Synthetic*], (),
-//     /* -------------- */
-//     [Single-line],       [83,855],     [45,000],        [9,367],       [5,000],                 [93,222],
-//     [Multi-line],        [38,765],     [45,000],        [4,258],       [5,000],                 [43,023],
-//     [Total],            [122,620],     [90,000],       [13,625],      [10,000],                [136,245],
-//   )
-// ) <license_plate_totalx>
 
 #figure(
   caption: [Korean license plate dataset characters distribution],

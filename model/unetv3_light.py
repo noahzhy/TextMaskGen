@@ -3,13 +3,6 @@ from jax import numpy as jnp
 from flax import linen as nn
 
 
-# local shape module
-class ShapeModule(nn.Module):
-    @nn.compact
-    def __call__(self, x):
-        return x.shape
-
-
 class AddCoords(nn.Module):
     with_r: bool = True
     with_boundary: bool = False
@@ -234,7 +227,7 @@ if __name__ == '__main__':
 
     key = jax.random.PRNGKey(0)
     model = UNetV3(16, training=True)
-    x = jnp.ones((1, 256, 256, 3))
+    x = jnp.ones((1, 128, 256, 3))
     params = model.init(key, x)
     out, batch_stats = model.apply(
         params, x,

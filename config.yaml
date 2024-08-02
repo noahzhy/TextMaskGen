@@ -1,4 +1,4 @@
-img_size: [256,256]
+img_size: [128,256]
 features: 16
 
 batch_size: 8

@@ -32,7 +32,7 @@ def resize(image, width=256, height=256, inter=Image.Resampling.LANCZOS) -> np.n
 
 
 class DataLoader:
-    def __init__(self, root_dir, batch_size, image_size=(256,256), shuffle=False, seed=2024, augment=True):
+    def __init__(self, root_dir, batch_size, image_size=(128,256), shuffle=False, seed=2024, augment=True):
         random.seed(seed)
         np.random.seed(seed)
         self.shuffle = shuffle
@@ -91,7 +91,7 @@ class DataLoader:
 if __name__ == "__main__":
     PATH = '/Users/haoyu/Documents/datasets/lpr/mini_train'
     BATCH_SIZE = 12
-    IMAGE_SIZE = (256, 256)
+    IMAGE_SIZE = (128, 256)
 
     train_data = DataLoader(PATH, BATCH_SIZE, IMAGE_SIZE)
 

@@ -1,8 +1,8 @@
 import os, sys, random, glob, time
 
 
-# random copy 128 files from src to dst
-def pick(src, dst, num=128):
+# random copy N files from src to dst
+def pick(src, dst, num=256):
     files = glob.glob(src + '/*.jpg')
     random.shuffle(files)
     for i in range(num):
